@@ -2,6 +2,8 @@
 library(data.table)
 
 ## Start looking at data ----
+### a note on the underlying futures contract for each option delivery date ----
+## Each option's underlying is the next expiring futures contract.  ES Futures expire March/June/Sept/Dec.  So options expiring in Jan/Feb/Mar have the March futures contract as the underlying.
 
 ## data layout guide: http://www.cmegroup.com/confluence/display/EPICSANDBOX/Time+and+Sales+CSV+Layout
 
@@ -27,5 +29,15 @@ names(esGroupedbySecond)[4] <- "avgTradePrice"
 ## October options ----
 
 ezOct <- read.csv('CME_TICK_EZ_201510.csv', stringsAsFactors = FALSE, header = FALSE)
-
 names(ezOct) <- names
+
+## create data.table
+ezOctDT <- data.table(ezOct)
+## has 299591 rows
+
+## set key
+setkey(ezOctDT, tradeDate, tradeTime, strikePrice, typeInd, deliveryDate)
+
+ezGroupedbySecond <- ezOctDT[,mean(tradePrice), by = key(ezOctDT)]
+## has 196323 rows
+names(ezGroupedbySecond)[6] <- "avgTradePrice"
