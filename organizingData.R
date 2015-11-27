@@ -66,31 +66,46 @@ octMerged <- ezGroupedbySecond[esGroupedbySecond]
 # Nov 15s: 11/20/2015
 # Dec 15s: 12/18/2015 (20151218)
 
-# since this is Oct only, we can do 17 + 30 + (31 - day + frac_day) [17 instead of 18 b/c expires at 8:30am]
+# since this is Oct only, we can do 17 + 30 + (31 - day + frac_day) [17 instead of 18 b/c expires at 8:30am]. But can notify of expiration at end of day -- so 18.
 rowNum <- 1:5
 
 ## function needs a scalar argument, can't be passed a vector ----
-timeTillExp <- function(rowNum){   ## add in time later -- not accurate to the day
+timeTillExpFun <- function(rowNum){   
   if (!complete.cases(octMerged[rowNum, ])) {
     if (octMerged$deliveryDate_esOct[rowNum] == 1512) {
-      (17 + 30 + (20151031 - octMerged$tradeDate[rowNum]))/365 
+      (18 + 30 + (20151031 - octMerged$tradeDate[rowNum]) + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365 
     } else {
       if (octMerged$deliveryDate_esOct[rowNum] == 1511) {
-        (19 + (20151031 - octMerged$tradeDate[rowNum]))/365
+        (20 + (20151031 - octMerged$tradeDate[rowNum]) + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365
       } else {
-        (20151031 - octMerged$tradeDate[rowNum])/365
+        (20151031 - octMerged$tradeDate[rowNum] + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365
       }
     }
   } else {
     if (octMerged$deliveryDate_ezOct[rowNum] == 1512) {
-      (17 + 30 + (20151031 - octMerged$tradeDate[rowNum]))/365 
+      (18 + 30 + (20151031 - octMerged$tradeDate[rowNum]) + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365 
     } else {
       if (octMerged$deliveryDate_ezOct[rowNum] == 1511) {
-        (19 + (20151031 - octMerged$tradeDate[rowNum]))/365
+        (20 + (20151031 - octMerged$tradeDate[rowNum]) + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365
       } else {
-        (20151031 - octMerged$tradeDate[rowNum])/365
+        (20151031 - octMerged$tradeDate[rowNum] + (as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][1]) * 60 * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][2]) * 60 + as.numeric(strsplit(octMerged$tradeTime[rowNum], split = ":")[[1]][3])) / (24 * 60 * 60)  )/365
       }
     }
   }
 }
 
+timeTillExp <- rep(NA, dim(octMerged)[1])
+for (i in 1:dim(octMerged)[1]) {
+  timeTillExp[i] <- timeTillExpFun(i)
+}
+
+## check if all went OK
+sum(is.na(timeTillExp)) > 0
+# FALSE, all ok.
+
+## add column to oct data ---
+
+octMergedwithTime <- cbind(octMerged, timeTillExp)
+
+## output csv to be read into analysis script ----
+write.csv(x = octMergedwithTime, file = "octData.csv")
