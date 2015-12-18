@@ -21,13 +21,29 @@ names(esOctDT) <- c("tradeDate", "tradeTime", "tradeSeqNum_esOct", "sessionInd_e
 
 setkey(esOctDT, tradeDate, tradeTime, deliveryDate_esOct)
 
-esGroupedbySecond <- esOctDT[,mean(tradePrice_esOct), by = key(esOctDT)]
+esGroupedbySecond <- esOctDT[,sum(tradeQuantity_esOct), by = key(esOctDT)]
 ## has 759288 rows
-names(esGroupedbySecond)[4] <- "avgTradePrice_esOct"
+names(esGroupedbySecond)[4] <- "sumTradeQuantity_esOct"
 setkey(esGroupedbySecond, tradeDate, tradeTime)
 
 ## remove 'esOctDT' now to free RAM?
 
+## Now need to create a vector of times (one for each second which ES is open in october) ----
+## ES Globex hours from cmegroup.com
+# Sunday - Friday 6:00 p.m. - 5:00 p.m. New York Time/ET (5:00 p.m. - 4:00 p.m. Chicago Time/CT) with 15-minute trading halt Monday – Friday 4:15 p.m. - 4:30 p.m. New York time/ET (3:15 p.m. - 3:30 p.m. Chicago Time/CT). Monday - Thursday 5:00 p.m. - 6:00 p.m. New York Time/ET (4:00 p.m. - 5:00 p.m. Chicago Time/CT) daily maintenance period.
+
+#For the BTIC, trading hours will be Sunday – Friday 6:00 p.m. - 4:00 p.m. New York time/ET (5:00 p.m. - 3:00 p.m. Chicago Time/CT);
+#Monday - Thursday 5:00 p.m. - 6:00 p.m. New York Time/ET (4:00 p.m. - 5:00 p.m. Chicago Time/CT) daily maintenance period.
+
+
+
+
+
+
+
+
+
+### Old analysis below -------------------------------------
 ### October options ----
 
 ## create data.table
