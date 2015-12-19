@@ -1,4 +1,5 @@
 library(data.table)
+library(RQuantLib)
 
 ### Code to analyze the october data -----
 
@@ -32,11 +33,48 @@ octData.c.IV.failed <- octData.c[is.na(IV), ]
 ## tried varying the initial vol buy that didn't work ----
 ## they look like they are failing becasue the numbers are wrong (would need neg IV).  Probabily because the market was moving sat -- so when we averaged over a second to get the ES price this took the average of a wide number.  The option trade may have been at one end of the second.
 
-octData.c.IV <- octData.c[!is.na(IV), ]
+octData.c.IV <- cbind(octData.c[!is.na(IV), ][-1,], IV[!is.na(IV)][-length(IV[!is.na(IV)])])
+names(octData.c.IV)[10] <- "IVlagged"
 
-
-
+## for each row, calculate the BS option value, then ready for neural network.
+BS <- 0
+Delta <- 0
+Gamma <- 0
+Vega <- 0
+Theta <- 0
+Rho <- 0
+## DivRho <- 0
+for (i in 1:dim(octData.c.IV)[1]){
+    ## the function EuropeanOption will return the value, but also the greeks; we should store the greeks here
+    tmp <- EuropeanOption(octData.c.IV$typeInd_ezOct[i], octData.c.IV$avgTradePrice_esOct[i], octData.c.IV$strikePrice_ezOct[i], 0.02, 0.01, octData.c.IV$timeTillExp[i], octData.c.IV$IVlagged[i])
+    BS[i] <- tmp$value
+    Delta[i] <- tmp$delta
+    Gamma[i] <- tmp$gamma
+    Vega[i] <- tmp$vega
+    Theta[i] <- tmp$theta
+    Rho[i] <- tmp$rho
+    ## DivRho[i] <- tmp$dividendRho
+}
 
 ## add IV and Black Scholes prices ----
 
-library(RQuantLib)
+octData.c.IV.BS <- cbind(octData.c.IV, BS, Delta, Gamma, Vega, Theta, Rho)
+
+## Now calculate each of these via NNs --------
+## but we cannot tell if the BS of NN Greeks are better! --------
+
+library(nnet)
+
+## We'll use a rolling training periods ----
+
+## training period length
+tp <- 200
+
+inputTrain <- data.frame(cbind(as.numeric(octData.c.IV.BS$strikePrice_ezOct), as.character(octData.c.IV.BS$typeInd_ezOct), as.numeric(octData.c.IV.BS$avgTradePrice_esOct), as.numeric(octData.c.IV.BS$timeTillExp), as.numeric(octData.c.IV.BS$IVlagged)), stringsAsFactors = FALSE)
+names(inputTrain) <- c()
+inputTrain$typeInd_ezOct[inputTrain$typeInd_ezOct == "call"] <- 1
+inputTrain <- inputTrain[inputTrain$typeInd_ezOct == "put", ] <- 1
+
+for (i in (tp + 1):dim(octData.c.IV.BS)[1]){
+    inputTrain <- octData.c.IV.BS[(i - tp):i]
+nnet(inputTrain, respTrain,data=datTrain, size=10, linout=T)
