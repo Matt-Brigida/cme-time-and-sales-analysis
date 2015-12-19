@@ -68,13 +68,71 @@ library(nnet)
 ## We'll use a rolling training periods ----
 
 ## training period length
-tp <- 200
+tp <- 100
 
+## shouldn't use the term 'Train' below.  The training set is handled in the loop.  Should just be input variables and response.
+## set up inputs
+## same answer is add constant rf and div yield
 inputTrain <- data.frame(cbind(as.numeric(octData.c.IV.BS$strikePrice_ezOct), as.character(octData.c.IV.BS$typeInd_ezOct), as.numeric(octData.c.IV.BS$avgTradePrice_esOct), as.numeric(octData.c.IV.BS$timeTillExp), as.numeric(octData.c.IV.BS$IVlagged)), stringsAsFactors = FALSE)
-names(inputTrain) <- c()
-inputTrain$typeInd_ezOct[inputTrain$typeInd_ezOct == "call"] <- 1
-inputTrain <- inputTrain[inputTrain$typeInd_ezOct == "put", ] <- 1
+names(inputTrain) <- c("Strike", "Type", "ES_Price", "Time", "IVlagged")
+inputTrain$Type[inputTrain$Type == "call"] <- 0
+inputTrain$Type[inputTrain$Type == "put"] <- 1
+## change all columns to numeric
+inputTrain <- data.frame(apply(inputTrain, 2, function(x) as.numeric(x)))
 
-for (i in (tp + 1):dim(octData.c.IV.BS)[1]){
-    inputTrain <- octData.c.IV.BS[(i - tp):i]
-nnet(inputTrain, respTrain,data=datTrain, size=10, linout=T)
+## set up response
+respTrain <- octData.c.IV.BS$avgTradePrice_ezOct
+
+prediction <- 0
+nnPredError <- 0
+BSError <- 0
+## rolling training and prediction -----
+for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
+    ## train
+    inputTrainMod <- inputTrain[(i - tp):i, ]
+    respTrainMod <- respTrain[(i - tp):i]
+    trainMod <- nnet(inputTrainMod, respTrainMod, size=10, linout=T)
+    ## predict
+    prediction[i + 1] <- predict(trainMod, inputTrain[i+1, ]) 
+
+    nnPredError[i + 1] <- abs(prediction - respTrain[i+1])
+    BSError[i + 1] <- abs(octData.c.IV.BS$BS[i + 1] - respTrain[i + 1])
+
+    ## results <- cbind(prediction, nnPredError, BSError)
+    ## return(results)
+}
+
+results <- data.frame(cbind(prediction[-c(1:(tp+1))], nnPredError[-c(1:(tp+1))], BSError[-c(1:(tp+1))]))
+names(results) <- c("nnPredValue", "nnPredError", "BSError")
+
+## with tp = 200
+mean(results$nnPredError)
+## 15.54689
+mean(results$BSError)
+## 13.88409
+### BS wins
+
+## with tp = 100
+mean(results$nnPredError)
+## 15.54989
+sd(results$nnPredError)
+## 18.78325
+mean(results$BSError)
+## 13.88242
+sd(results$BSError)
+## 36.10133
+### BS wins on mean, but has a higher variability of its error (is is way off sometimes)
+
+plot(results$nnPredError, results$BSError)
+## interesting result seen in above plot.  If one is off the other is accurate for that same option, i.e. if the error is 500 for NN it is 2 for BSM, and vice versa
+
+plot(density(results$nnPredValue))
+plot(density(results$BSError))
+
+
+plot(results$nnPredValue, type = 'l')
+plot(results$BSError, type = 'l')
+
+
+#### Next:  Separate into different strike prices and repeast the analysis for each strike.  This takes into account (for BS) the vol smirk.  Note, the NN can already - above - control for the smirk.
+
