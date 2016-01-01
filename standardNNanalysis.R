@@ -1,64 +1,5 @@
-library(data.table)
-library(RQuantLib)
-
-### Code to analyze the october data -----
-
-octData <- read.csv(file = "octData.csv")
-octData <- octData[,-1]
-
-## only rows (seconds) with all data (options and futures)
-octData.c <- octData[complete.cases(octData), ]
-## set type column to character ----
-octData.c <- transform(octData.c, typeInd_ezOct = as.character(typeInd_ezOct))
-
-## convert to data.table for easy mutation -----
-octData.c <- data.table(octData.c)
-
-## replace "C" with "call and "P" with "put" (for IV function) ----
-octData.c[octData.c == "C"] <- "call"
-octData.c[octData.c == "P"] <- "put"
-
-## Add implied vol column ----
-IV <- 0
-for (i in 1:dim(octData.c)[1]){
-    
-    IV[i] <- tryCatch(EuropeanOptionImpliedVolatility(octData.c$typeInd_ezOct[i], octData.c$avgTradePrice_ezOct[i], octData.c$avgTradePrice_esOct[i], octData.c$strikePrice_ezOct[i], .02, .01, octData.c$timeTillExp[i], .1),
-                      error = function(e) return(NA)
-                      )
-}
-
-## there are 376 instances where the IV calc failed; extract those into a dataframe
-
-octData.c.IV.failed <- octData.c[is.na(IV), ]
-## tried varying the initial vol buy that didn't work ----
-## they look like they are failing becasue the numbers are wrong (would need neg IV).  Probabily because the market was moving sat -- so when we averaged over a second to get the ES price this took the average of a wide number.  The option trade may have been at one end of the second.
-
-octData.c.IV <- cbind(octData.c[!is.na(IV), ][-1,], IV[!is.na(IV)][-length(IV[!is.na(IV)])])
-names(octData.c.IV)[10] <- "IVlagged"
-
-## for each row, calculate the BS option value, then ready for neural network.
-BS <- 0
-Delta <- 0
-Gamma <- 0
-Vega <- 0
-Theta <- 0
-Rho <- 0
-## DivRho <- 0
-for (i in 1:dim(octData.c.IV)[1]){
-    ## the function EuropeanOption will return the value, but also the greeks; we should store the greeks here
-    tmp <- EuropeanOption(octData.c.IV$typeInd_ezOct[i], octData.c.IV$avgTradePrice_esOct[i], octData.c.IV$strikePrice_ezOct[i], 0.02, 0.01, octData.c.IV$timeTillExp[i], octData.c.IV$IVlagged[i])
-    BS[i] <- tmp$value
-    Delta[i] <- tmp$delta
-    Gamma[i] <- tmp$gamma
-    Vega[i] <- tmp$vega
-    Theta[i] <- tmp$theta
-    Rho[i] <- tmp$rho
-    ## DivRho[i] <- tmp$dividendRho
-}
-
-## add IV and Black Scholes prices ----
-
-octData.c.IV.BS <- cbind(octData.c.IV, BS, Delta, Gamma, Vega, Theta, Rho)
+## load data ----
+octData.c.IV.BS <- read.csv("octDataForNNanalysis.csv", header = TRUE, stringsAsFactors = FALSE)
 
 ## Now calculate each of these via NNs --------
 ## but we cannot tell if the BS of NN Greeks are better! --------
@@ -87,15 +28,15 @@ prediction <- 0
 nnPredError <- 0
 BSError <- 0
 ## rolling training and prediction -----
-for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
+for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)) {
     ## train
     modelInputsMod <- modelInputs[(i - tp):i, ]
     modelRespMod <- modelResp[(i - tp):i]
-    trainMod <- nnet(modelInputsMod, modelRespMod, size=8, linout=T)
+    trainMod <- nnet(modelInputsMod, modelRespMod, size = 8, linout=T)
     ## predict
-    prediction[i + 1] <- predict(trainMod, modelInputs[i+1, ])[1]
+    prediction[i + 1] <- predict(trainMod, modelInputs[i + 1, ])[1]
 
-    nnPredError[i + 1] <- abs(prediction - modelResp[i+1])
+    nnPredError[i + 1] <- abs(prediction - modelResp[i + 1])
     BSError[i + 1] <- abs(octData.c.IV.BS$BS[i + 1] - modelResp[i + 1])
 
     ## results <- cbind(prediction, nnPredError, BSError)
@@ -104,7 +45,7 @@ for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
 
 ## some results
 #{{{
-results <- data.frame(cbind(prediction[-c(1:(tp+1))], nnPredError[-c(1:(tp+1))], BSError[-c(1:(tp+1))]))
+results <- data.frame(cbind(prediction[-c(1:(tp + 1))], nnPredError[-c(1:(tp + 1))], BSError[-c(1:(tp + 1))]))
 names(results) <- c("nnPredValue", "nnPredError", "BSError")
 
 ## with tp = 200
@@ -182,7 +123,7 @@ for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
 ## results: NN wins
 mean(nnPredError[205:length(respCalls)])
 ## 17.98131
-> mean(BSError[205:length(respCalls)])
+mean(BSError[205:length(respCalls)])
 ## 22.358
 
 
@@ -194,15 +135,15 @@ prediction <- 0
 nnPredError <- 0
 BSError <- 0
 ## rolling training and prediction -----
-for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
+for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)) {
     ## train
     modelInputsMod <- inputPuts[(i - tp):i, ]
     modelRespMod <- respPuts[(i - tp):i]
-    trainMod <- nnet(modelInputsMod, modelRespMod, size=8, linout=T)
+    trainMod <- nnet(modelInputsMod, modelRespMod, size = 8, linout = T)
     ## predict
-    prediction[i + 1] <- predict(trainMod, inputPuts[i+1, ])[1]
+    prediction[i + 1] <- predict(trainMod, inputPuts[i + 1, ])[1]
 
-    nnPredError[i + 1] <- abs(prediction - respPuts[i+1])
+    nnPredError[i + 1] <- abs(prediction - respPuts[i + 1])
     BSError[i + 1] <- abs(octData.c.IV.BS$BS[i + 1] - respPuts[i + 1])
 
     ## results <- cbind(prediction, nnPredError, BSError)
@@ -212,7 +153,7 @@ for (i in (tp + 1):(dim(octData.c.IV.BS)[1] - 1)){
 ## Puts results -- NN wins 
 mean(BSError[205:114211])
 ## 19.39558
-> mean(nnPredError[205:114211])
+mean(nnPredError[205:114211])
 ## 13.95602
 
 
@@ -226,7 +167,7 @@ prediction2 <- 0
 nnPredError2 <- 0
 BSError2 <- 0
 ## rolling training and prediction -----
-for (i in (tp2 + 1):(dim(octData.c.IV.BS)[1] - 1)){
+for (i in (tp2 + 1):(dim(octData.c.IV.BS)[1] - 1)) {
     ## train
     modelInputsMod <- modelInputs[(i - tp2):i, ]
     modelRespMod <- modelResp[(i - tp2):i]
